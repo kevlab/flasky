@@ -1,18 +1,46 @@
 from datetime import datetime
-from flask import Flask, render_template, session, redirect, url_for, flash
+import os
+from flask import Flask, render_template, session, redirect, url_for
 from flask.ext.script import Manager
 from flask.ext.bootstrap import Bootstrap
 from flask.ext.moment import Moment
 from flask.ext.wtf import Form
+from flask.ext.sqlalchemy import SQLAlchemy
 from wtforms import StringField, SubmitField
 from wtforms.validators import Required
 
+basedir = os.path.abspath(os.path.dirname(__file__))
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hardtoguess'
+app.config['SQLALCHEMY_DATABASE_URI'] =\
+    'sqlite:///' + os.path.join(basedir, 'data.sqlite')
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
 
 manager = Manager(app)
 bootstrap = Bootstrap(app)
 moment = Moment(app)
+db = SQLAlchemy(app)
+
+
+class Role(db.Model):
+    __tablename__ = 'roles'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), unique=True)
+    users = db.relationship('User', backref='role', lazy='dynamic')
+
+    def __repr__(self):
+        return '<Role %r>' % self.name
+
+
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), unique=True, index=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+
+    def __repr__(self):
+        return '<User %r>' % self.username
 
 
 class NameForm(Form):
@@ -34,15 +62,20 @@ def internal_server_error(e):
 def index():
     form = NameForm()
     if form.validate_on_submit():
-        old_name = session.get('name')
-        if old_name is not None and old_name != form.name.data:
-            flash('Looks like you have changed your name!')
+        user = User.query.filter_by(username=form.name.data).first()
+        if user is None:
+            user = User(username=form.name.data)
+            db.session.add(user) # we autocommit!! see app.config
+            session['known'] = False
+        else:
+            session['known'] = True
         session['name'] = form.name.data
         form.name.data = ''
         return redirect(url_for('index'))
     return render_template('index.html',
                            current_time=datetime.utcnow(),
                            form=form,
+                           known=session.get('known', False),
                            name=session.get('name'))
     # we are redirecting so we use session.get('name')
 
