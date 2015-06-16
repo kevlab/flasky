@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from threading import Thread
 from flask import Flask, render_template, session, redirect, url_for
 from flask.ext.script import Manager, Shell
 from flask.ext.bootstrap import Bootstrap
@@ -60,13 +61,21 @@ class NameForm(Form):
     submit = SubmitField('Submit')
 
 
+# if large volume, better to use a celery task queue to dedicate a job
+def send_async_email(app, msg):
+    with app.app_context():
+        mail.send(msg)
+
+
 def send_mail(to, subject, template, **kwargs):
     msg = Message(app.config['FLASKY_MAIL_SUBJECT_PREFIX'] + subject,
                   sender=app.config['FLASKY_MAIL_SENDER'],
                   recipients=[to])
     msg.body = render_template(template + '.txt', **kwargs)
     msg.html = render_template(template + '.html', **kwargs)
-    mail.send(msg)
+    thr = Thread(target=send_async_email, args=[app, msg])
+    thr.start()
+    return thr
 
 
 # so we don't have to do all these imports when we use the shell
@@ -113,11 +122,6 @@ def index():
                            known=session.get('known', False),
                            name=session.get('name'))
     # we are redirecting so we use session.get('name')
-
-
-@app.route('/user/<name>')
-def user(name):
-    return render_template('user.html', name=name)
 
 
 if __name__ == '__main__':
