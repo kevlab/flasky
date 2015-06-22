@@ -22,6 +22,7 @@ class User(db.Model):
     @property
     def password(self):
         raise AttributeError('password is not a readable attribute')
+        # password is write only
 
     @password.setter
     def password(self, password):
