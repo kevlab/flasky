@@ -242,9 +242,12 @@ class User(UserMixin, db.Model):
         # give users option to view blog posts from only the users they follow.
         return Post.query.join(Follow, Follow.followed_id == Post.author_id)\
             .filter(Follow.follower_id == self.id)
-
-    def __repr__(self):
-        return '<User %r>' % self.username
+        # equivalent to:
+        # return db.session.query(Post).select_from(Follow).\
+        #     filter_by(follower_id=self.id).\
+        #     join(Post, Follow.followed_id == Post.author_id)
+    # defines as property, does not need the (). That way, all relationships
+    # have a consistent syntax.
 
 
 class AnonymousUser(AnonymousUserMixin):
