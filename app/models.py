@@ -92,6 +92,7 @@ class User(UserMixin, db.Model):
     # the many-to-many relationship must be decomposed into the two basic
     # one-to-many relationships for the left and right
     # sides, and these must be defined as standard relationships.
+    comments = db.relationship('Comment', backref='author', lazy='dynamic')
 
     @staticmethod
     def generate_fake(count=100):
@@ -282,6 +283,7 @@ class Post(db.Model):
     body_html = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    comments = db.relationship('Comment', backref='post', lazy='dynamic')
 
     @staticmethod
     def generate_fake(count=100):
@@ -314,3 +316,24 @@ db.event.listen(Post.body, 'set', Post.on_changed_body)
 # any instance of the class is set to a new value. The function renders the HTML version
 # of the body and stores it in body_html , effectively making the conversion of the Mark‐
 # down text to HTML fully automatic.
+
+
+class Comment(db.Model):
+    __tablename__ = 'comments'
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.Text)
+    body_html = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    disabled = db.Column(db.Boolean)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    post_id = db.Column(db.Integer, db.ForeignKey('posts.id'))
+
+    @staticmethod
+    def on_changed_body(target, value, oldvalue, initiator):
+        allowed_tags = ['a', 'abbr', 'acronym', 'b', 'code', 'em', 'i',
+                        'strong']
+        target.body_html = bleach.linkify(bleach.clean(
+            markdown(value, output_format='html'),
+            tags=allowed_tags, strip=True))
+
+db.event.listen(Comment.body, 'set', Comment.on_changed_body)
